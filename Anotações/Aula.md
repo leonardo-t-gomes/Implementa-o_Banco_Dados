@@ -220,7 +220,7 @@ SELECT *
 FROM DEPARTAMENTO AS D
 JOIN LOCALIZACAO_DEP AS L
 ON D.Dnumero = L.Dnumero;
-```
+````
 
 # Aula 06 - 04/09/2026
 ```sql
@@ -354,7 +354,7 @@ SELECT Pnome FROM FUNCIONARIO;
 OPEN cursorFuncionario;
 
 FETCH NEXT FROM cursorFuncionario INTO @nome;
-```
+````
 
 
 # Aula 05 - 28/08/2026
