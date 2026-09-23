@@ -531,7 +531,7 @@ FROM FUNCIONARIO
 WHERE Pnome = 'Jennifer'
 
 PRINT DATEDIFF(YEAR, @dataJennifer, GETDATE());****
- ```
+ ````
 
 
 
