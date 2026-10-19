@@ -1,4 +1,224 @@
-# Aula 10
+# Aula 12- 16/10/2026
+- Mostra das Profissoẽs
+  
+# Aula 11 - 09/10/2026
+
+### TRANSACTION
+- Uma transação em banco de dados é um conjunto de operações que são tratadas como uma única unidade de trabalho.
+- Uma transação deve ser completamente concluída ou completamente revertida.
+- O principal objetivo de uma transação é garantir a integridade de dados.
+
+### TRANSACTION - COMANDOS
+- **BEGIN TRANSACTION**: Inicia uma nova transação
+- **COMMIT TRANSACTION**: Confirma a transação, aplicando permanentemente todas as operações feitas no banco de dados.
+- **ROLLBACK TRANSACTION**: Desfaz todas as operações realizadas desde o início da transação.
+- **SAVEPOINT**: Define um ponto dentro de uma transação para permitir um rollback parcial, até esse ponto.
+
+### ACID
+- Atomicidade: garante que uma transação é tratada como uma única unidade, se qualquer parte da transação falhar, todo o resto também falha.
+- Consistência: garante que uma transação leve o banco de dados de um estado válido para outro estado válido, respeitando todas as regras definidas.
+- Isolamento: garante que as transações sejam feitas de forma isolada, sem que as operações de uma transação afetem as operações da outra.
+- Durabilidade: garante que após o commit, ela permanecerá no banco de dados, mesmo que ocorra uma falha no sistema, os dados serão persistidos no armazenamento.
+
+
+```sql
+CREATE DATABASE CAIXA;
+USE CAIXA;
+
+
+-- Criação da tabela
+CREATE TABLE conta(
+	id INT PRIMARY KEY,
+	Nome VARCHAR(50),
+	Saldo MONEY
+);
+
+-- Inserindo na tabela
+INSERT INTO conta
+VALUES  (10, 'Maria', 500),
+		(20, 'João', 1500),
+		(30, 'Paulo', 30000),
+		(40, 'Maria', 50000);
+
+GO
+-- Primeira transação
+BEGIN TRANSACTION;
+
+DECLARE @erro INT = 0;
+
+INSERT INTO CONTA
+VALUES (50, 'Pedro', 50);
+SET @erro = @erro + @@ERROR; 
+
+INSERT INTO CONTA
+VALUES (10, 'Judas', 666);
+SET @erro = @erro + @@ERROR; -- Erro 2627
+
+SELECT * FROM conta;
+
+IF @erro <> 0
+BEGIN
+	PRINT 'Transação revertida';
+	ROLLBACK TRANSACTION;
+END
+ELSE
+BEGIN
+	PRINT 'Transação realizada com sucesso';
+	COMMIT TRANSACTION;
+END;
+
+SELECT * FROM conta;
+GO
+
+GO
+BEGIN TRAN;
+
+UPDATE conta
+SET Saldo = Saldo + 10000
+WHERE Nome = 'Maria';
+
+IF @@ROWCOUNT <> 1
+BEGIN
+	SELECT * FROM conta;
+	ROLLBACK TRAN;
+END
+ELSE
+	COMMIT TRAN;
+
+-- Transferir dinheiro de uma pessoa para outra
+GO
+CREATE OR ALTER PROCEDURE sp_pix
+    (@id_origem INT, @id_destino INT, @Valor MONEY)
+AS
+BEGIN
+    BEGIN TRANSACTION;
+
+    DECLARE @Saldo MONEY;
+
+    SELECT @Saldo = Saldo
+    FROM conta
+    WHERE id = @id_origem;
+
+    IF (@Saldo < @Valor OR @Valor <= 0)
+    BEGIN
+        ROLLBACK TRANSACTION;
+        PRINT 'Erro no pix';
+    END
+    ELSE
+    BEGIN
+        UPDATE conta
+        SET Saldo = Saldo - @Valor
+        WHERE id = @id_origem;
+
+        UPDATE conta
+        SET Saldo = Saldo + @Valor
+        WHERE id = @id_destino;
+
+        COMMIT TRANSACTION;
+        PRINT 'Pix realizado';
+    END
+
+    SELECT * FROM conta;
+END;
+GO
+
+EXEC sp_pix 10, 20, 500;
+
+-- SAVE POINT
+GO
+BEGIN TRAN;
+
+INSERT INTO conta
+VALUES (50, 'Pedro', 50);
+
+SAVE TRAN pedroOK
+
+INSERT INTO conta
+VALUES (10, 'Juca', -200);
+
+IF @@ERROR <> 0
+BEGIN
+    ROLLBACK TRAN pedroOK;
+    COMMIT TRAN;
+    PRINT 'Voltamos para o save point';
+END
+ELSE
+    COMMIT TRAN;
+GO
+
+GO
+-- TRY/CATCH
+BEGIN TRY
+    PRINT 'Olá, try catch!';
+    SELECT 1/0; -- erro;
+    PRINT 'Não cheguei aqui';
+END TRY
+BEGIN CATCH
+    PRINT 'Erro';
+    PRINT 'Número erro: '+CAST(ERROR_NUMBER() AS VARCHAR(10));
+    PRINT 'Mensagem de erro: '+ERROR_MESSAGE();
+END CATCH
+GO
+
+-- TRANSACTION + TRY CATCH
+GO
+BEGIN TRAN;
+BEGIN TRY
+    INSERT INTO conta
+    VALUES (60, 'Mateus', 15);
+
+    SELECT * FROM conta;
+
+    INSERT INTO conta
+    VALUES (10, 'Juca', -200);
+
+    COMMIT TRAN;
+
+    SELECT * FROM conta;
+END TRY
+BEGIN CATCH
+    ROLLBACK TRAN;
+    PRINT 'Número erro: '+CAST(ERROR_NUMBER() AS VARCHAR(10));
+    PRINT 'Mensagem de erro: '+ERROR_MESSAGE();
+END CATCH
+GO
+
+-- Inserir um novo usuário no banco (não permita duplicidade de nomes)
+GO
+CREATE OR ALTER PROCEDURE sp_Inserir
+    (@id INT, @Nome VARCHAR(50), @Saldo MONEY)
+AS
+BEGIN
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        IF NOT EXISTS (SELECT 1 FROM conta WHERE Nome = @Nome)
+        BEGIN
+            INSERT INTO conta (id, Nome, Saldo)
+            VALUES (@id, @Nome, @Saldo);
+
+            COMMIT TRANSACTION;
+            PRINT 'Usuário inserido com sucesso!';
+        END
+        ELSE
+        BEGIN
+            ROLLBACK TRANSACTION;
+            PRINT 'Erro: já existe um usuário com esse nome.';
+        END
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+
+        PRINT 'Número do erro: ' + CAST(ERROR_NUMBER() AS VARCHAR(10));
+        PRINT 'Mensagem de erro: ' + ERROR_MESSAGE();
+    END CATCH
+END;
+GO
+
+EXEC sp_Inserir 100, 'Bruno', 100000000000000000000000;
+```
+
+# Aula 10 - 02/10/2026
 ````sql
 CREATE DATABASE CAIXA;
 USE CAIXA;
@@ -193,10 +413,10 @@ select * from conta
 
 ````
 
-# Aula 09 
+# Aula 09 25/09/2026
 - Correção da prova
 
-# Aula 08
+# Aula 08 - 18/09/2026
 - PROVA
 
 # Aula 07 - 11/09/2026
