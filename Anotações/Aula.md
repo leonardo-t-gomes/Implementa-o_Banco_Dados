@@ -1,3 +1,212 @@
+# Aula 12 - 23/10/2026
+## Trigger 
+ - Regras que especificam ações que são automaticamente disparadas por certos eventos.
+ - Executado automaticamente quando um usuário realiza uma operação de modificação de dados.
+ - Disparados apenas por eventos com INSERT, UPDATE ou DELETE
+
+   ### Modo de uso:
+   - AFTER: O código presente no trigger é executado após todas as ações na tabela terem sido completas
+   - INSTEAD OF: O código presente no trigger é executado no lugar de operação que causou seu disparo
+  
+```sql
+CREATE OR ALTER TRIGGER trg_after_insert_dpt
+ON DEPARTAMENTO
+AFTER INSERT
+AS
+BEGIN
+	DECLARE @nome VARCHAR(40);
+	SELECT @nome = I.Dnome
+	FROM inserted AS I;
+
+	PRINT 'Foi inserido um novo departamento: ' + @nome;
+END;
+GO
+
+INSERT INTO DEPARTAMENTO(Dnumero, Dnome)
+VALUES(88,'Expedição')
+GO;
+
+CREATE TRIGGER trg_insetadof_delete_dpt
+ON DEPARTAMENTO
+INSTEAD OF DELETE
+AS
+BEGIN
+	PRINT 'NÃO DELETEI o registro';
+END
+
+DELETE 
+FROM DEPARTAMENTO
+WHERE Dnumero = 88
+
+ALTER TABLE DEPARTAMENTO
+DISABLE TRIGGER trg_insetadof_delete_dpt;
+
+EXEC sp_helptrigger DEPARTAMENTO;
+GO;
+DROP TRIGGER trg_after_insert_dpt;
+
+--TRIGGER para nçao permitir nomes duplicados em DEPARTAMENTO
+CREATE TRIGGER trg_insteadof_insert_dpt
+ON DEPARTAMENTO
+INSTEAD OF DELETE
+AS
+BEGIN
+	DECLARE @nome VARCHAR(40), @numero INT;
+	--Atribuir a variavel @nome o valor que esta no insert
+	SELECT @nome = I.Dnome, @numero = Dnumero FROM inserted AS I
+	IF EXISTS(SELECT 1 FROM DEPARTAMENTO WHERE DNome = @nome)
+		RAISERROR('Já existe um departamento com esse nome', 16, 1)
+	ELSE
+		INSERT INTO DEPARTAMENTO (Dnumero, Dnome, Cpf_gerente, Data_inicio_gerente)
+		SELECT I.Dnumero, I.Dnome, I.Cpf_gerente, I.Data_inicio_gerente
+		FROM inserted AS I
+END
+GO;
+
+DROP TRIGGER trg_insteadof_insert_dpt
+
+INSERT INTO DEPARTAMENTO(Dnumero, Dnome)
+VALUES (100, 'Vendas')
+GO;
+
+CREATE OR ALTER TRIGGER trg_insteadof_insert_dpt
+ON DEPARTAMENTO
+AFTER INSERT 
+AS
+BEGIN
+	DECLARE @nome VARCHAR(40), @numero INT;
+
+	SELECT @nome = I.Dnome, @numero = Dnumero 
+	FROM inserted AS I
+
+	SELECT * FROM DEPARTAMENTO;
+
+	IF ((SELECT COUNT (Dnome) FROM DEPARTAMENTO WHERE Dnome = @nome) > 1)
+	BEGIN	
+		ROLLBACK TRANSACTION;
+		RAISERROR ('Já existe um departamento com esse nome', 16, 1)
+	END
+END
+GO;
+
+--Função UPDATE()
+--Verificar se um nome ja foi alterado
+CREATE TRIGGER trg_for_update_nome
+ON DEPARTAMENTO
+FOR UPDATE -- FOR = AFTER
+AS
+BEGIN
+	DECLARE @nome_antigo VARCHAR(40),
+			@nome_novo VARCHAR(40);
+	SELECT @nome_antigo = D.Dnome FROM deleted AS D;
+	SELECT @nome_novo = I.Dnome FROM inserted AS I; 
+	IF UPDATE(Dnome)
+	BEGIN
+		PRINT 'O nome era: ' + @nome_antigo;
+		PRINT 'O novo nome é: ' + @nome_novo;
+	END
+	ELSE
+		PRINT 'O nome não foi alterado';
+END
+
+UPDATE DEPARTAMENTO
+SET Dnome = 'Tecnologia'
+WHERE Dnome = 'TI';
+
+UPDATE DEPARTAMENTO
+SET Dnumero = 9
+WHERE Dnome = 'Estoque';
+
+SELECT * FROM DEPARTAMENTO
+GO;
+DROP TRIGGER trg_for_update_nome
+
+
+CREATE TABLE LOG_FUNCIONARIO(
+	log_id INT IDENTITY(100,1) PRIMARY KEY,
+	cpf CHAR(11),
+	operacao VARCHAR(10),
+	data_hora DATETIME DEFAULT GETDATE()
+)
+
+-- TRIGGER de log de insert
+CREATE TRIGGER trg_for_insert_funcionario
+ON FUNCIONARIO
+FOR UPDATE
+AS 
+BEGIN
+	INSERT INTO LOG_FUNCIONARIO (cpf, operacao)
+	SELECT I.Cpf, 'INSERT'
+	FROM inserted AS I
+END
+GO
+
+CREATE TRIGGER trg_for_delete_funcionario
+ON FUNCIONARIO
+FOR UPDATE
+AS 
+BEGIN
+	INSERT INTO LOG_FUNCIONARIO (cpf, operacao)
+	SELECT D.Cpf, 'DELETE'
+	FROM deleted AS D
+END
+
+INSERT INTO FUNCIONARIO (Pnome, Unome, Cpf, Datanasc, Endereco, Sexo, Salario, Bonus, Data_Admissao, dnr)
+VALUES ('Juca', 'Da Silva', '4568790', '2015-06-08', 'Rua Sete', 'M', 1100, 0, '2026-10-23', 10);
+
+SELECT * FROM FUNCIONARIO ORDER BY Pnome;
+SELECT * FROM LOG_FUNCIONARIO;
+
+UPDATE FUNCIONARIO
+SET Salario = 100
+WHERE Cpf = '4568790';
+
+DELETE FROM FUNCIONARIO
+WHERE Cpf = '4568790';
+
+CREATE TRIGGER trg_for_IDU_funcionario
+ON FUNCIONARIO
+FOR INSERT, DELETE, UPDATE
+AS 
+BEGIN
+	IF EXISTS (SELECT * FROM inserted)
+	BEGIN
+		IF EXISTS((SELECT * FROM deleted))
+			INSERT INTO LOG_FUNCIONARIO (cpf, operacao)
+			SELECT I.Cpf, 'UPDATE'
+			FROM inserted AS I
+		ELSE	
+			INSERT INTO LOG_FUNCIONARIO (cpf, operacao)
+			SELECT I.Cpf, 'INSERT'
+			FROM inserted AS I
+		END
+		ELSE
+			INSERT INTO LOG_FUNCIONARIO (cpf, operacao)
+			SELECT D.Cpf, 'DELETE'
+			FROM deleted AS D
+END
+GO
+
+-- VIEW
+CREATE VIEW vw_rh_funcionario_dpt
+AS
+SELECT 
+	CONCAT(Pnome, ' ', Minicial, '. ', Unome) AS 'Nome',
+	DATEDIFF(YEAR, Datanasc, GETDATE()) AS 'Idade',
+	Endereco AS 'Endereço',
+	Data_Admissao AS 'Admissão',
+	D.Dnome AS 'Departamento'
+FROM FUNCIONARIO AS F
+JOIN DEPARTAMENTO AS D
+ON F.Dnr = D.Dnumero;
+
+SELECT * FROM vw_rh_funcionario_dpt
+WHERE DEPARTAMENTO = 'Matriz';
+```
+<img width="867" height="453" alt="image" src="https://github.com/user-attachments/assets/755a2059-e039-45bd-93b5-db1850fd5ea7" />
+
+
+
 # Aula 12- 16/10/2026
 - Mostra das Profissoẽs
   
